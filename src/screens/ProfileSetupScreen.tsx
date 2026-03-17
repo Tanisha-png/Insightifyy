@@ -1,5 +1,7 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
 import CryptoJS from 'crypto-js';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'expo-image';
 import * as SecureStore from 'expo-secure-store';
 import React, { useMemo, useState } from 'react';
 import {
@@ -26,6 +28,7 @@ export function ProfileSetupScreen({ onComplete }: Props) {
   const [dob, setDob] = useState<Date>(new Date('2000-01-01'));
   const [showPicker, setShowPicker] = useState(false);
   const [monthlySurplus, setMonthlySurplus] = useState('800');
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -58,7 +61,7 @@ export function ProfileSetupScreen({ onComplete }: Props) {
         id: 'local-user',
         name: trimmed,
         dobIso: dob.toISOString().slice(0, 10),
-        profilePicUri: null,
+        profilePicUri: photoUri,
         avgMonthlySurplus: parsedSurplus,
         vaultKey,
       });
@@ -90,18 +93,30 @@ export function ProfileSetupScreen({ onComplete }: Props) {
           <Text style={styles.sectionTitle}>Profile picture</Text>
           <View style={styles.picRow}>
             <View style={styles.picPlaceholder}>
-              <Text style={styles.picInitials}>{initials(fullName)}</Text>
+              {photoUri ? (
+                <Image
+                  source={{ uri: photoUri }}
+                  style={styles.picImage}
+                  contentFit="cover"
+                />
+              ) : (
+                <Text style={styles.picInitials}>{initials(fullName)}</Text>
+              )}
             </View>
             <View style={{ flex: 1, gap: 6 }}>
-              <Text style={styles.helper}>
-                Placeholder for now (hook up Image Picker in Phase 2).
-              </Text>
+              <Text style={styles.helper}>Add a photo or keep the default avatar.</Text>
               <Pressable
                 accessibilityRole="button"
-                onPress={() => setError('Profile photo upload placeholder (not wired yet).')}
+                onPress={() => {
+                  pickImage().then((uri) => {
+                    if (uri) setPhotoUri(uri);
+                  });
+                }}
                 style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
               >
-                <Text style={styles.secondaryButtonText}>Add Photo (Soon)</Text>
+                <Text style={styles.secondaryButtonText}>
+                  {photoUri ? 'Change photo' : 'Add photo'}
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -200,6 +215,26 @@ async function getOrCreateVaultKey(): Promise<string> {
   return key;
 }
 
+async function pickImage(): Promise<string | null> {
+  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (status !== 'granted') {
+    return null;
+  }
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    allowsEditing: true,
+    aspect: [1, 1],
+    quality: 0.9,
+  });
+
+  if (result.canceled || !result.assets || result.assets.length === 0) {
+    return null;
+  }
+
+  return result.assets[0]?.uri ?? null;
+}
+
 function isAtLeast18(dob: Date): boolean {
   const now = new Date();
   const cutoff = new Date(now.getFullYear() - 18, now.getMonth(), now.getDate());
@@ -260,6 +295,11 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(154,230,255,0.30)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  picImage: {
+    width: 62,
+    height: 62,
+    borderRadius: 62,
   },
   picInitials: { color: '#9AE6FF', fontSize: 18, fontWeight: '900', letterSpacing: 0.4 },
   field: { gap: 6 },
