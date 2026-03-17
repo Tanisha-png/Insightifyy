@@ -1,20 +1,22 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { ManualEntryScreen } from './src/screens/ManualEntryScreen';
+import { ProfileSetupScreen } from './src/screens/ProfileSetupScreen';
+import { SecurityTrustScreen } from './src/screens/SecurityTrustScreen';
 
 export default function App() {
+  const [screen, setScreen] = useState<'trust' | 'profile' | 'manual'>('trust');
+
   return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <>
+      {screen === 'trust' ? (
+        <SecurityTrustScreen onContinue={() => setScreen('profile')} />
+      ) : screen === 'profile' ? (
+        <ProfileSetupScreen onComplete={() => setScreen('manual')} />
+      ) : (
+        <ManualEntryScreen onBack={() => setScreen('trust')} />
+      )}
+      <StatusBar style="light" />
+    </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
