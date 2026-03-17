@@ -25,6 +25,7 @@ export function ProfileSetupScreen({ onComplete }: Props) {
   const [fullName, setFullName] = useState('');
   const [dob, setDob] = useState<Date>(new Date('2000-01-01'));
   const [showPicker, setShowPicker] = useState(false);
+  const [monthlySurplus, setMonthlySurplus] = useState('800');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -44,6 +45,12 @@ export function ProfileSetupScreen({ onComplete }: Props) {
       return;
     }
 
+    const parsedSurplus = toMoney(monthlySurplus);
+    if (!Number.isFinite(parsedSurplus) || parsedSurplus < 0) {
+      setError('Please enter a valid monthly surplus (0 or more).');
+      return;
+    }
+
     setSaving(true);
     try {
       const vaultKey = await getOrCreateVaultKey();
@@ -52,6 +59,7 @@ export function ProfileSetupScreen({ onComplete }: Props) {
         name: trimmed,
         dobIso: dob.toISOString().slice(0, 10),
         profilePicUri: null,
+        avgMonthlySurplus: parsedSurplus,
         vaultKey,
       });
 
@@ -120,6 +128,19 @@ export function ProfileSetupScreen({ onComplete }: Props) {
               <Text style={styles.dobText}>{dobLabel}</Text>
               <Text style={styles.dobHint}>Tap to change</Text>
             </Pressable>
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Average monthly surplus</Text>
+            <Text style={styles.helper}>Total income minus total expenses</Text>
+            <TextInput
+              value={monthlySurplus}
+              onChangeText={setMonthlySurplus}
+              keyboardType="decimal-pad"
+              placeholder="e.g., 800"
+              placeholderTextColor="rgba(255,255,255,0.35)"
+              style={styles.input}
+            />
           </View>
 
           {showPicker ? (
@@ -200,6 +221,11 @@ function initials(name: string): string {
     .slice(0, 2);
   if (parts.length === 0) return '?';
   return parts.map((p) => p[0]?.toUpperCase() ?? '').join('');
+}
+
+function toMoney(s: string): number {
+  const n = Number(String(s).replace(/[^0-9.]/g, ''));
+  return Number.isFinite(n) ? n : 0;
 }
 
 const styles = StyleSheet.create({

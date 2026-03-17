@@ -8,6 +8,9 @@ export type UserProfile = {
     nameEnc: EncryptedBlob;
     dobIsoEnc: EncryptedBlob;
   };
+  financial: {
+    avgMonthlySurplusEnc: EncryptedBlob;
+  };
   createdAtIso: string;
   updatedAtIso: string;
 };
@@ -17,6 +20,7 @@ export type UserProfilePlain = {
   name: string;
   dobIso: string;
   profilePicUri?: string | null;
+  avgMonthlySurplus: number;
   createdAtIso: string;
   updatedAtIso: string;
 };
@@ -26,6 +30,7 @@ export function createEncryptedUserProfile(params: {
   name: string;
   dobIso: string;
   profilePicUri?: string | null;
+  avgMonthlySurplus: number;
   vaultKey: string;
   nowIso?: string;
 }): UserProfile {
@@ -38,6 +43,9 @@ export function createEncryptedUserProfile(params: {
     pii: {
       nameEnc: vault.encryptUtf8(params.name),
       dobIsoEnc: vault.encryptUtf8(params.dobIso),
+    },
+    financial: {
+      avgMonthlySurplusEnc: vault.encryptUtf8(String(params.avgMonthlySurplus)),
     },
     createdAtIso: nowIso,
     updatedAtIso: nowIso,
@@ -55,6 +63,7 @@ export function decryptUserProfile(params: {
     profilePicUri: params.profile.profilePicUri ?? null,
     name: vault.decryptUtf8(params.profile.pii.nameEnc),
     dobIso: vault.decryptUtf8(params.profile.pii.dobIsoEnc),
+    avgMonthlySurplus: Number(vault.decryptUtf8(params.profile.financial.avgMonthlySurplusEnc)),
     createdAtIso: params.profile.createdAtIso,
     updatedAtIso: params.profile.updatedAtIso,
   };

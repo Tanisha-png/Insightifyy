@@ -14,14 +14,15 @@ import type { PurchaseCategory } from '../domain/PurchaseAnalyzer';
 
 type Props = {
   onBack?: () => void;
+  initialMonthlySurplus?: number;
 };
 
-export function ManualEntryScreen({ onBack }: Props) {
+export function ManualEntryScreen({ onBack, initialMonthlySurplus }: Props) {
   const analyzer = useMemo(() => new PurchaseAnalyzer(), []);
 
   const [liquidSavings, setLiquidSavings] = useState('12000');
   const [monthlyExpenses, setMonthlyExpenses] = useState('3200');
-  const [monthlySurplus, setMonthlySurplus] = useState('800');
+  const [monthlySurplus, setMonthlySurplus] = useState(String(initialMonthlySurplus ?? 800));
   const [purchaseAmount, setPurchaseAmount] = useState('399');
   const [category, setCategory] = useState<PurchaseCategory>('Want');
   const [isEmergency, setIsEmergency] = useState(false);
@@ -116,7 +117,10 @@ export function ManualEntryScreen({ onBack }: Props) {
           {analysis.verdict === 'Bad Purchase' && analysis.pathToYes?.message ? (
             <View style={styles.pathCard}>
               <Text style={styles.pathTitle}>The Path to Yes</Text>
-              <Text style={styles.pathText}>{analysis.pathToYes.message}</Text>
+              <Text style={styles.pathText}>{analysis.pathToYes.countdown}</Text>
+              {analysis.pathToYes.proTip ? (
+                <Text style={styles.pathMeta}>{analysis.pathToYes.proTip}</Text>
+              ) : null}
               {Number.isFinite(analysis.pathToYes.monthsToSafeBuy) ? (
                 <Text style={styles.pathMeta}>
                   Shortfall: ${analysis.pathToYes.shortfall} • Timeline: {analysis.pathToYes.monthsToSafeBuy}{' '}

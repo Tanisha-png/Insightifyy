@@ -21,6 +21,8 @@ export type PathToYes = {
   monthsToSafeBuy: number;
   safeBuyDateIso: string;
   message: string;
+  countdown: string;
+  proTip?: string;
 };
 
 export type PurchaseAnalyzerInput = {
@@ -151,14 +153,19 @@ function computePathToYes(params: {
       monthsToSafeBuy: Number.POSITIVE_INFINITY,
       safeBuyDateIso: '',
       message,
+      countdown: 'Save for — months to buy this safely.',
     };
   }
 
+  // Math: (Amount Needed / Monthly Surplus) = Months to wait
   const monthsToSafeBuy = Math.max(1, Math.ceil(shortfall / params.monthlySurplus));
   const safeBuyDate = addMonths(new Date(), monthsToSafeBuy);
   const safeBuyDateIso = safeBuyDate.toISOString().slice(0, 10);
 
   const monthlySave = Math.min(params.monthlySurplus, shortfall);
+  const countdown = `Save for ${monthsToSafeBuy} month(s) to buy this safely.`;
+
+  const proTip = computeProTip(shortfall, params.monthlySurplus);
   const message = `Not today, but you're on the path! Based on your surplus, you can safely buy this on ${safeBuyDateIso} if you save $${round2(
     monthlySave
   )} per month.`;
@@ -169,6 +176,8 @@ function computePathToYes(params: {
     monthsToSafeBuy,
     safeBuyDateIso,
     message,
+    countdown,
+    proTip,
   };
 }
 
@@ -195,5 +204,19 @@ function addMonths(d: Date, months: number): Date {
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+function computeProTip(shortfall: number, monthlySurplus: number): string | undefined {
+  const bump = 50;
+  if (monthlySurplus <= 0) return undefined;
+
+  const baseMonths = Math.max(1, Math.ceil(shortfall / monthlySurplus));
+  const fasterMonths = Math.max(1, Math.ceil(shortfall / (monthlySurplus + bump)));
+  if (fasterMonths >= baseMonths) return undefined;
+
+  const monthsSaved = baseMonths - fasterMonths;
+  const approxWeeksSooner = Math.max(1, Math.round(monthsSaved * 4.345));
+
+  return `Pro Tip: Increase your surplus by $${bump} to get this about ${approxWeeksSooner} week(s) sooner!`;
 }
 
