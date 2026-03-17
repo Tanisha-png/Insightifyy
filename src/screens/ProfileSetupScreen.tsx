@@ -28,7 +28,7 @@ export function ProfileSetupScreen({ onComplete }: Props) {
   const [dob, setDob] = useState<Date>(new Date('2000-01-01'));
   const [showPicker, setShowPicker] = useState(false);
   const [monthlySurplus, setMonthlySurplus] = useState('800');
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [image, setImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -61,7 +61,7 @@ export function ProfileSetupScreen({ onComplete }: Props) {
         id: 'local-user',
         name: trimmed,
         dobIso: dob.toISOString().slice(0, 10),
-        profilePicUri: photoUri,
+        profilePicUri: image,
         avgMonthlySurplus: parsedSurplus,
         vaultKey,
       });
@@ -92,30 +92,41 @@ export function ProfileSetupScreen({ onComplete }: Props) {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Profile picture</Text>
           <View style={styles.picRow}>
-            <View style={styles.picPlaceholder}>
-              {photoUri ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                pickImage().then((uri) => {
+                  if (uri) setImage(uri);
+                });
+              }}
+              style={({ pressed }) => [
+                styles.picPlaceholder,
+                pressed && styles.pressed,
+              ]}
+            >
+              {image ? (
                 <Image
-                  source={{ uri: photoUri }}
+                  source={{ uri: image }}
                   style={styles.picImage}
                   contentFit="cover"
                 />
               ) : (
                 <Text style={styles.picInitials}>{initials(fullName)}</Text>
               )}
-            </View>
+            </Pressable>
             <View style={{ flex: 1, gap: 6 }}>
               <Text style={styles.helper}>Add a photo or keep the default avatar.</Text>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => {
                   pickImage().then((uri) => {
-                    if (uri) setPhotoUri(uri);
+                    if (uri) setImage(uri);
                   });
                 }}
                 style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
               >
                 <Text style={styles.secondaryButtonText}>
-                  {photoUri ? 'Change photo' : 'Add photo'}
+                  {image ? 'Change photo' : 'Add photo'}
                 </Text>
               </Pressable>
             </View>
