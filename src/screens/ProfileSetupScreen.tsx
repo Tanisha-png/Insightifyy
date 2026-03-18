@@ -26,6 +26,9 @@ const VAULT_KEY_ID = 'insightifyy.vaultKey.v1';
 const PROFILE_ID = 'insightifyy.profile.v1';
 
 export function ProfileSetupScreen({ onComplete }: Props) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [hasExistingProfile, setHasExistingProfile] = useState(false);
+
   const [fullName, setFullName] = useState('');
   const [bio, setBio] = useState('');
   const [dob, setDob] = useState<Date>(new Date('2000-01-01'));
@@ -35,7 +38,14 @@ export function ProfileSetupScreen({ onComplete }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const [draftFullName, setDraftFullName] = useState('');
+  const [draftBio, setDraftBio] = useState('');
+  const [draftDob, setDraftDob] = useState<Date>(new Date('2000-01-01'));
+  const [draftMonthlySurplus, setDraftMonthlySurplus] = useState('800');
+  const [draftImage, setDraftImage] = useState<string | null>(null);
+
   const dobLabel = useMemo(() => formatDate(dob), [dob]);
+  const draftDobLabel = useMemo(() => formatDate(draftDob), [draftDob]);
 
   useEffect(() => {
     (async () => {
@@ -46,6 +56,8 @@ export function ProfileSetupScreen({ onComplete }: Props) {
           SecureStore.getItemAsync(PROFILE_ID),
         ]);
 
+        let loadedAny = false;
+
         if (storedProfileJson) {
           const parsed = safeJsonParse<{ name?: string; bio?: string; imageUri?: string | null }>(
             storedProfileJson
@@ -55,6 +67,7 @@ export function ProfileSetupScreen({ onComplete }: Props) {
           if (typeof parsed?.imageUri === 'string' || parsed?.imageUri === null) {
             setImage(parsed.imageUri ?? null);
           }
+          loadedAny = true;
         }
 
         if (vaultKey && encryptedProfileJson) {
@@ -70,29 +83,64 @@ export function ProfileSetupScreen({ onComplete }: Props) {
               setMonthlySurplus(String(plain.avgMonthlySurplus));
             }
             if (plain.profilePicUri) setImage(plain.profilePicUri);
+            loadedAny = true;
           }
+        }
+
+        setHasExistingProfile(loadedAny);
+        if (!loadedAny) {
+          setIsEditing(true);
+          setDraftFullName('');
+          setDraftBio('');
+          setDraftDob(new Date('2000-01-01'));
+          setDraftMonthlySurplus('800');
+          setDraftImage(null);
+        } else {
+          setIsEditing(false);
         }
       } catch {
         // Ignore hydration errors; user can still edit manually.
+        setIsEditing(true);
       }
     })();
   }, []);
 
-  async function onSave() {
+  function beginEdit() {
+    setError(null);
+    setDraftFullName(fullName);
+    setDraftBio(bio);
+    setDraftDob(dob);
+    setDraftMonthlySurplus(monthlySurplus);
+    setDraftImage(image);
+    setIsEditing(true);
+  }
+
+  function cancelEdit() {
+    setError(null);
+    setDraftFullName(fullName);
+    setDraftBio(bio);
+    setDraftDob(dob);
+    setDraftMonthlySurplus(monthlySurplus);
+    setDraftImage(image);
+    setIsEditing(false);
+    setShowPicker(false);
+  }
+
+  async function saveEdits() {
     setError(null);
 
-    const trimmed = fullName.trim().replace(/\s+/g, ' ');
+    const trimmed = draftFullName.trim().replace(/\s+/g, ' ');
     if (!trimmed) {
       setError('Please enter your full name.');
       return;
     }
 
-    if (!isAtLeast18(dob)) {
+    if (!isAtLeast18(draftDob)) {
       setError('You must be at least 18 years old to use Insightifyy.');
       return;
     }
 
-    const parsedSurplus = toMoney(monthlySurplus);
+    const parsedSurplus = toMoney(draftMonthlySurplus);
     if (!Number.isFinite(parsedSurplus) || parsedSurplus < 0) {
       setError('Please enter a valid monthly surplus (0 or more).');
       return;
@@ -104,8 +152,8 @@ export function ProfileSetupScreen({ onComplete }: Props) {
       const profile = createEncryptedUserProfile({
         id: 'local-user',
         name: trimmed,
-        dobIso: dob.toISOString().slice(0, 10),
-        profilePicUri: image,
+        dobIso: draftDob.toISOString().slice(0, 10),
+        profilePicUri: draftImage,
         avgMonthlySurplus: parsedSurplus,
         vaultKey,
       });
@@ -116,11 +164,22 @@ export function ProfileSetupScreen({ onComplete }: Props) {
 
       await saveProfile({
         name: trimmed,
-        bio,
-        imageUri: image,
+        bio: draftBio,
+        imageUri: draftImage,
       });
 
-      onComplete?.();
+      setFullName(trimmed);
+      setBio(draftBio);
+      setDob(draftDob);
+      setMonthlySurplus(String(parsedSurplus));
+      setImage(draftImage);
+
+      setHasExistingProfile(true);
+      setIsEditing(false);
+
+      if (!hasExistingProfile) {
+        onComplete?.();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save profile.');
     } finally {
@@ -132,11 +191,24 @@ export function ProfileSetupScreen({ onComplete }: Props) {
     <View style={styles.root}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={styles.kicker}>Secure profile</Text>
-          <Text style={styles.title}>Let’s set you up</Text>
-          <Text style={styles.subtitle}>
-            We encrypt your name and date of birth before saving them on-device.
-          </Text>
+          <View style={styles.headerRow}>
+            <View style={{ flex: 1, gap: 8 }}>
+              <Text style={styles.kicker}>Secure profile</Text>
+              <Text style={styles.title}>{hasExistingProfile ? 'Your profile' : 'Let’s set you up'}</Text>
+              <Text style={styles.subtitle}>
+                We encrypt your name and date of birth before saving them on-device.
+              </Text>
+            </View>
+            {!isEditing && (
+              <Pressable
+                accessibilityRole="button"
+                onPress={beginEdit}
+                style={({ pressed }) => [styles.editButton, pressed && styles.pressed]}
+              >
+                <Text style={styles.editButtonText}>Edit</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
 
         <View style={styles.card}>
@@ -145,8 +217,9 @@ export function ProfileSetupScreen({ onComplete }: Props) {
             <Pressable
               accessibilityRole="button"
               onPress={() => {
+                if (!isEditing) return;
                 pickImage().then((uri) => {
-                  if (uri) setImage(uri);
+                  if (uri) setDraftImage(uri);
                 });
               }}
               style={({ pressed }) => [
@@ -154,92 +227,110 @@ export function ProfileSetupScreen({ onComplete }: Props) {
                 pressed && styles.pressed,
               ]}
             >
-              {image ? (
+              {(isEditing ? draftImage : image) ? (
                 <Image
-                  source={{ uri: image }}
+                  source={{ uri: (isEditing ? draftImage : image) as string }}
                   style={styles.picImage}
                   contentFit="cover"
                 />
               ) : (
-                <Text style={styles.picInitials}>{initials(fullName)}</Text>
+                <Text style={styles.picInitials}>{initials(isEditing ? draftFullName : fullName)}</Text>
               )}
             </Pressable>
             <View style={{ flex: 1, gap: 6 }}>
               <Text style={styles.helper}>Add a photo or keep the default avatar.</Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  pickImage().then((uri) => {
-                    if (uri) setImage(uri);
-                  });
-                }}
-                style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
-              >
-                <Text style={styles.secondaryButtonText}>
-                  {image ? 'Change photo' : 'Add photo'}
-                </Text>
-              </Pressable>
+              {isEditing ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    pickImage().then((uri) => {
+                      if (uri) setDraftImage(uri);
+                    });
+                  }}
+                  style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+                >
+                  <Text style={styles.secondaryButtonText}>
+                    {draftImage ? 'Change photo' : 'Add photo'}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           </View>
 
           <View style={styles.field}>
             <Text style={styles.label}>Full name</Text>
-            <TextInput
-              value={fullName}
-              onChangeText={setFullName}
-              autoCapitalize="words"
-              placeholder="e.g., Jordan Lee"
-              placeholderTextColor="rgba(255,255,255,0.35)"
-              style={styles.input}
-            />
+            {isEditing ? (
+              <TextInput
+                value={draftFullName}
+                onChangeText={setDraftFullName}
+                autoCapitalize="words"
+                placeholder="e.g., Jordan Lee"
+                placeholderTextColor="#CCCCCC"
+                style={styles.input}
+              />
+            ) : (
+              <Text style={styles.valueText}>{fullName || '—'}</Text>
+            )}
           </View>
 
           <View style={styles.field}>
             <Text style={styles.label}>Bio (optional)</Text>
-            <TextInput
-              value={bio}
-              onChangeText={setBio}
-              multiline
-              placeholder="Tell Insightifyy a bit about your financial goals."
-              placeholderTextColor="#CCCCCC"
-              style={[styles.input, styles.bioInput]}
-            />
+            {isEditing ? (
+              <TextInput
+                value={draftBio}
+                onChangeText={setDraftBio}
+                multiline
+                placeholder="Tell Insightifyy a bit about your financial goals."
+                placeholderTextColor="#CCCCCC"
+                style={[styles.input, styles.bioInput]}
+              />
+            ) : (
+              <Text style={styles.valueText}>{bio?.trim() ? bio : '—'}</Text>
+            )}
           </View>
 
           <View style={styles.field}>
             <Text style={styles.label}>Date of birth</Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setShowPicker(true)}
-              style={({ pressed }) => [styles.dobButton, pressed && styles.pressed]}
-            >
-              <Text style={styles.dobText}>{dobLabel}</Text>
-              <Text style={styles.dobHint}>Tap to change</Text>
-            </Pressable>
+            {isEditing ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setShowPicker(true)}
+                style={({ pressed }) => [styles.dobButton, pressed && styles.pressed]}
+              >
+                <Text style={styles.dobText}>{draftDobLabel}</Text>
+                <Text style={styles.dobHint}>Tap to change</Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.valueText}>{dobLabel || '—'}</Text>
+            )}
           </View>
 
           <View style={styles.field}>
             <Text style={styles.label}>Average monthly surplus</Text>
             <Text style={styles.helper}>Total income minus total expenses</Text>
-            <TextInput
-              value={monthlySurplus}
-              onChangeText={setMonthlySurplus}
-              keyboardType="decimal-pad"
-              placeholder="e.g., 800"
-              placeholderTextColor="rgba(255,255,255,0.35)"
-              style={styles.input}
-            />
+            {isEditing ? (
+              <TextInput
+                value={draftMonthlySurplus}
+                onChangeText={setDraftMonthlySurplus}
+                keyboardType="decimal-pad"
+                placeholder="e.g., 800"
+                placeholderTextColor="#CCCCCC"
+                style={styles.input}
+              />
+            ) : (
+              <Text style={styles.valueText}>{monthlySurplus || '—'}</Text>
+            )}
           </View>
 
           {showPicker ? (
             <DateTimePicker
-              value={dob}
+              value={draftDob}
               mode="date"
               display={Platform.select({ ios: 'spinner', android: 'default', default: 'default' })}
               maximumDate={new Date()}
               onChange={(_, selectedDate) => {
                 if (Platform.OS !== 'ios') setShowPicker(false);
-                if (selectedDate) setDob(selectedDate);
+                if (selectedDate) setDraftDob(selectedDate);
               }}
             />
           ) : null}
@@ -257,17 +348,41 @@ export function ProfileSetupScreen({ onComplete }: Props) {
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
         </View>
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={onSave}
-          disabled={saving}
-          style={({ pressed }) => [
-            styles.primaryButton,
-            (pressed || saving) && styles.primaryPressed,
-          ]}
-        >
-          <Text style={styles.primaryButtonText}>{saving ? 'Saving…' : 'Continue'}</Text>
-        </Pressable>
+        {isEditing ? (
+          <View style={styles.editActions}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={saveEdits}
+              disabled={saving}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                (pressed || saving) && styles.primaryPressed,
+              ]}
+            >
+              <Text style={styles.primaryButtonText}>{saving ? 'Saving…' : 'Save'}</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={cancelEdit}
+              disabled={saving}
+              style={({ pressed }) => [
+                styles.cancelButton,
+                pressed && styles.pressed,
+                saving && { opacity: 0.6 },
+              ]}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            onPress={beginEdit}
+            style={({ pressed }) => [styles.secondaryCta, pressed && styles.pressed]}
+          >
+            <Text style={styles.secondaryCtaText}>Edit Profile</Text>
+          </Pressable>
+        )}
 
         <Text style={styles.footnote}>
           Your PII is encrypted locally (AES-256 placeholder) and can be deleted anytime.
@@ -366,6 +481,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#070A12' },
   content: { paddingHorizontal: 20, paddingTop: 54, paddingBottom: 48, gap: 16 },
   header: { gap: 8 },
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   kicker: {
     color: '#9AE6FF',
     fontSize: 12,
@@ -375,6 +491,15 @@ const styles = StyleSheet.create({
   },
   title: { color: '#FFFFFF', fontSize: 26, fontWeight: '900' },
   subtitle: { color: 'rgba(255,255,255,0.72)', fontSize: 14, lineHeight: 20 },
+  editButton: {
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  editButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
   card: {
     borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.06)',
@@ -404,6 +529,7 @@ const styles = StyleSheet.create({
   field: { gap: 6 },
   label: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
   helper: { color: 'rgba(255,255,255,0.55)', fontSize: 12, lineHeight: 16 },
+  valueText: { color: 'rgba(255,255,255,0.88)', fontSize: 16, lineHeight: 22, fontWeight: '700' },
   input: {
     borderRadius: 12,
     borderWidth: 1,
@@ -456,6 +582,27 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
   pressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
+  editActions: { gap: 10 },
+  cancelButton: {
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  cancelButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
+  secondaryCta: {
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  secondaryCtaText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
   footnote: {
     color: 'rgba(255,255,255,0.56)',
     textAlign: 'center',
