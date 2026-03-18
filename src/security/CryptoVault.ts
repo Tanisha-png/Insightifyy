@@ -1,4 +1,5 @@
 import CryptoJS from 'crypto-js';
+import * as Crypto from 'expo-crypto';
 
 export type EncryptedBlob = {
   v: 1;
@@ -15,7 +16,8 @@ export class CryptoVault {
   }
 
   encryptUtf8(plaintext: string): EncryptedBlob {
-    const iv = CryptoJS.lib.WordArray.random(16);
+    const ivBytes = Crypto.getRandomBytes(16);
+    const iv = CryptoJS.lib.WordArray.create(ivBytes as unknown as number[]);
     const encrypted = CryptoJS.AES.encrypt(plaintext, this.keyMaterial, {
       iv,
       mode: CryptoJS.mode.CBC,

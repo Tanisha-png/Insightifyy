@@ -1,5 +1,6 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
 import CryptoJS from 'crypto-js';
+import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import * as SecureStore from 'expo-secure-store';
@@ -219,7 +220,10 @@ async function getOrCreateVaultKey(): Promise<string> {
   const existing = await SecureStore.getItemAsync(VAULT_KEY_ID);
   if (existing) return existing;
 
-  const key = CryptoJS.lib.WordArray.random(32).toString(CryptoJS.enc.Hex);
+  const bytes = await Crypto.getRandomBytes(32);
+  const key = Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
   await SecureStore.setItemAsync(VAULT_KEY_ID, key, {
     keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
   });
