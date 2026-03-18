@@ -5,7 +5,7 @@ import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import * as SecureStore from 'expo-secure-store';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Platform,
   Pressable,
@@ -16,7 +16,7 @@ import {
   View,
 } from 'react-native';
 
-import { createEncryptedUserProfile } from '../models/UserProfile';
+import { createEncryptedUserProfile, decryptUserProfile, type UserProfile } from '../models/UserProfile';
 
 type Props = {
   onComplete?: () => void;
@@ -36,6 +36,47 @@ export function ProfileSetupScreen({ onComplete }: Props) {
   const [saving, setSaving] = useState(false);
 
   const dobLabel = useMemo(() => formatDate(dob), [dob]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [storedProfileJson, vaultKey, encryptedProfileJson] = await Promise.all([
+          AsyncStorage.getItem('@insightifyy/profile'),
+          SecureStore.getItemAsync(VAULT_KEY_ID),
+          SecureStore.getItemAsync(PROFILE_ID),
+        ]);
+
+        if (storedProfileJson) {
+          const parsed = safeJsonParse<{ name?: string; bio?: string; imageUri?: string | null }>(
+            storedProfileJson
+          );
+          if (parsed?.name) setFullName(parsed.name);
+          if (typeof parsed?.bio === 'string') setBio(parsed.bio);
+          if (typeof parsed?.imageUri === 'string' || parsed?.imageUri === null) {
+            setImage(parsed.imageUri ?? null);
+          }
+        }
+
+        if (vaultKey && encryptedProfileJson) {
+          const encryptedProfile = safeJsonParse<UserProfile>(encryptedProfileJson);
+          if (encryptedProfile) {
+            const plain = decryptUserProfile({ profile: encryptedProfile, vaultKey });
+            if (plain.name) setFullName(plain.name);
+            if (plain.dobIso) {
+              const parsedDob = new Date(plain.dobIso);
+              if (!Number.isNaN(parsedDob.getTime())) setDob(parsedDob);
+            }
+            if (Number.isFinite(plain.avgMonthlySurplus)) {
+              setMonthlySurplus(String(plain.avgMonthlySurplus));
+            }
+            if (plain.profilePicUri) setImage(plain.profilePicUri);
+          }
+        }
+      } catch {
+        // Ignore hydration errors; user can still edit manually.
+      }
+    })();
+  }, []);
 
   async function onSave() {
     setError(null);
@@ -263,6 +304,14 @@ async function saveProfile(params: {
 
   await AsyncStorage.setItem('@insightifyy/profile', JSON.stringify(profile));
   await AsyncStorage.setItem('@insightifyy/profileCreated', 'true');
+}
+
+function safeJsonParse<T>(value: string): T | null {
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return null;
+  }
 }
 
 async function pickImage(): Promise<string | null> {
