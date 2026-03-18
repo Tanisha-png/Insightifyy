@@ -1,4 +1,5 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import CryptoJS from 'crypto-js';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
@@ -26,6 +27,7 @@ const PROFILE_ID = 'insightifyy.profile.v1';
 
 export function ProfileSetupScreen({ onComplete }: Props) {
   const [fullName, setFullName] = useState('');
+  const [bio, setBio] = useState('');
   const [dob, setDob] = useState<Date>(new Date('2000-01-01'));
   const [showPicker, setShowPicker] = useState(false);
   const [monthlySurplus, setMonthlySurplus] = useState('800');
@@ -69,6 +71,12 @@ export function ProfileSetupScreen({ onComplete }: Props) {
 
       await SecureStore.setItemAsync(PROFILE_ID, JSON.stringify(profile), {
         keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+      });
+
+      await saveProfile({
+        name: trimmed,
+        bio,
+        imageUri: image,
       });
 
       onComplete?.();
@@ -142,6 +150,18 @@ export function ProfileSetupScreen({ onComplete }: Props) {
               placeholder="e.g., Jordan Lee"
               placeholderTextColor="rgba(255,255,255,0.35)"
               style={styles.input}
+            />
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Bio (optional)</Text>
+            <TextInput
+              value={bio}
+              onChangeText={setBio}
+              multiline
+              placeholder="Tell Insightifyy a bit about your financial goals."
+              placeholderTextColor="#CCCCCC"
+              style={[styles.input, styles.bioInput]}
             />
           </View>
 
@@ -228,6 +248,21 @@ async function getOrCreateVaultKey(): Promise<string> {
     keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
   });
   return key;
+}
+
+async function saveProfile(params: {
+  name: string;
+  bio: string;
+  imageUri: string | null;
+}): Promise<void> {
+  const profile = {
+    name: params.name,
+    bio: params.bio,
+    imageUri: params.imageUri,
+  };
+
+  await AsyncStorage.setItem('@insightifyy/profile', JSON.stringify(profile));
+  await AsyncStorage.setItem('@insightifyy/profileCreated', 'true');
 }
 
 async function pickImage(): Promise<string | null> {
@@ -331,11 +366,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  bioInput: {
+    minHeight: 72,
+    textAlignVertical: 'top',
+  },
   dobButton: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    backgroundColor: 'rgba(0,0,0,0.22)',
+    borderColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     paddingHorizontal: 12,
     paddingVertical: 12,
     flexDirection: 'row',
@@ -343,7 +382,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dobText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
-  dobHint: { color: 'rgba(255,255,255,0.55)', fontSize: 12, fontWeight: '700' },
+  dobHint: { color: '#CCCCCC', fontSize: 12, fontWeight: '700' },
   errorText: { color: '#FB7185', fontSize: 13, lineHeight: 18, fontWeight: '700' },
   primaryButton: {
     borderRadius: 14,
